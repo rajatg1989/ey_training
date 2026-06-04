@@ -1,0 +1,5 @@
+Homework : you can create a ETL pipeline for Google Weather API : https://openweathermap.org/api. 
+
+1. Extract last 6 months data from this API (write a cron job to do it dynamically).
+2. Then do EDA, figure out the characteristic of this time series data, data cleaning, handling missing values, data normalization.
+3. Choose a Machine learning model to do time series forecasting, you can Azure service to implement it.
