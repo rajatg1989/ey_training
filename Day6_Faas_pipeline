@@ -1,0 +1,40 @@
+import pandas as pd
+from openai import OpenAI
+
+# 1. Initialize OpenAI (Replace with your key or use env variables)
+client = OpenAI(api_key="your-openai-key-here")
+
+# 2. Simulated real-world messy dataset
+data = {
+    'id': [1, 2, 3],
+    'raw_feedback': [
+        "The checkout page crashed twice during payment.", 
+        "Great delivery, loved the packaging!", 
+        "Item arrived damaged and broken."
+    ],
+    'irrelevant_column': [None, "xyz", "abc"]
+}
+df = pd.DataFrame(data)
+
+# 3. Clean Data (Drop missing column)
+df = df.dropna(axis=1, how='all')
+
+# 4. Process with GPT
+def get_gpt_insight(text):
+    response = client.chat.completions.create(
+        model="gpt-4o-mini",
+        messages=[
+            {"role": "system", "content": "Categorize into 1 word: Bug, Positive, or Damaged."},
+            {"role": "user", "content": text}
+        ],
+        max_tokens=5,
+        temperature=0
+    )
+    return response.choices[0].message.content.strip()
+
+df['category'] = df['raw_feedback'].apply(get_gpt_insight)
+
+# 5. Export to CSV locally in Cloud Shell
+df.to_csv("cleaned_output.csv", index=False)
+print("Pipeline complete! Sample data:")
+print(df)
