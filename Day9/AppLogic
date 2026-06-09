@@ -1,0 +1,83 @@
+# [Databricks Cell 2]
+import os
+import sys
+import uuid
+import json
+import logging
+import structlog
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Response, status
+from pydantic import BaseModel, Field
+from azure.servicebus.aio import ServiceBusClient
+from azure.servicebus import ServiceBusMessage
+
+# 1. Structured Logging Config
+logging.basicConfig(format="%(message)s", stream=sys.stdout, level=logging.INFO)
+structlog.configure(
+    processors=[
+        structlog.stdlib.add_log_level,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.JSONRenderer()
+    ],
+    context_class=dict,
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
+)
+logger = structlog.get_logger(__name__)
+
+# 2. Asynchronous Queue Manager
+class QueueManager:
+    def __init__(self):
+        self.connection_string = os.getenv("AZURE_SERVICEBUS_CONNECTION_STRING", "Endpoint=sb://mock.servicebus.windows.net/;SharedAccessKeyName=RootManageSharedAccessKey;SharedAccessKey=mock=")
+        self.queue_name = os.getenv("AZURE_QUEUE_NAME", "task-queue")
+        self.client = None
+        self.sender = None
+
+    async def connect(self):
+        if "mock=" in self.connection_string:
+            logger.warning("Running with dummy keys. Queue operations will be simulated.")
+            return
+        self.client = ServiceBusClient.from_connection_string(conn_str=self.connection_string)
+        self.sender = self.client.get_queue_sender(queue_name=self.queue_name)
+
+    async def disconnect(self):
+        if self.sender: await self.sender.close()
+        if self.client: await self.client.close()
+
+    async def send_message(self, content: str):
+        if self.sender:
+            await self.sender.send_messages(ServiceBusMessage(content))
+        else:
+            logger.info("[SIMULATION] Message queued internally", message=content)
+
+queue_manager = QueueManager()
+
+# 3. FastAPI Initialization
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await queue_manager.connect()
+    yield
+    await queue_manager.disconnect()
+
+app = FastAPI(title="Databricks-FastAPI-Service", lifespan=lifespan)
+
+# 4. Endpoints
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy", "runtime": "databricks-driver"}
+
+class TaskRequest(BaseModel):
+    user_id: str
+    payload: dict
+
+@app.post("/tasks", status_code=status.HTTP_202_ACCEPTED)
+async def create_task(task: TaskRequest):
+    task_id = str(uuid.uuid4())
+    log = logger.bind(task_id=task_id, user_id=task.user_id)
+    
+    message_payload = json.dumps({"task_id": task_id, "data": task.payload})
+    await queue_manager.send_message(message_payload)
+    
+    log.info("Task successfully offloaded to message queue")
+    return {"status": "accepted", "task_id": task_id}
