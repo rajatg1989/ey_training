@@ -1,0 +1,9 @@
+RAG architecture and flow ·
+Vector DBs: Pinecone, Weaviate, FAISS, Azure AI Search 
+· Indexing, retrieval & latency considerations
+· Using Claude in RAG pipelines 
+· Large context window vs retrieval 
+· Hybrid RAG + long-context approach
+
+Build a RAG pipeline using LangChain + Azure AI Search · Test retrieval vs full-context prompting with Claude
+
