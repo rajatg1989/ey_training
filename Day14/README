@@ -1,0 +1,9 @@
+Responsible AI: bias, hallucination, explainability
+· Guardrails: moderation & safety layers
+· Responsible AI practices (EY principles)
+· Frameworks: LangChain, LlamaIndex, Haystack 
+· Deployment: cost, latency, compliance
+
+Exercise
+Implement a basic content moderation guardrail in an LLM pipeline; evaluate for bias and safety
+
