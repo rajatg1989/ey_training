@@ -1,0 +1,12 @@
+Content
+
+What is Agentic AI? vs traditional AI & GenAI 
+· Core capabilities: Perceive, Reason, Act, Learn
+· Single-agent vs Multi-agent · Real-world applications
+· Claude for reasoning-heavy multi-step tasks
+· Agent lifecycle & planning loops 
+· Frameworks: LangChain, LangGraph
+· Claude integration
+
+Exercise
+Build a simple agent using LangChain with memory and tools · Build equivalent agent using Claude with memory and tools
