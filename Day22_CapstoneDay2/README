@@ -1,0 +1,10 @@
+Setup backend (FastAPI) 
+· Integrate LLM APIs (OpenAI)
+· Setup vector DB (FAISS/Pinecone) 
+· Implement embedding & retrieval logic 
+· Test API endpoints ·
+Optional: Claude API alongside OpenAI –
+model selection strategy based on cost, latency, reasoning
+
+Exercise
+Build and test backend API with LLM integration; validate retrieval pipeline endpoints
