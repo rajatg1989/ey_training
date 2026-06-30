@@ -1,0 +1,6 @@
+README
+Build UI (Streamlit) 
+· Connect frontend to backend
+· Add middleware: logging, error handling
+· Implement basic user interaction flow
+· UI testing & feedback loop
