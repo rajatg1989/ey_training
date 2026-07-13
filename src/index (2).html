@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>KundliGPT replica — AI Vedic Astrologer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --night:#0d1030; --night-2:#161a47; --panel:#1b2056;
+    --ink:#ece9ff; --muted:#9aa0d8; --gold:#e7b94f; --gold-soft:#f2d68b;
+    --line:#33397e; --accent:#7c5cff; --ok:#5ad6a0; --warn:#ff8c6b;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:
+      radial-gradient(1100px 600px at 80% -10%, #20245e 0%, transparent 60%),
+      radial-gradient(900px 500px at 0% 100%, #1a1f55 0%, transparent 55%),
+      var(--night);
+    color:var(--ink); font-family:Inter,system-ui,sans-serif; line-height:1.55;
+  }
+  /* faint star field */
+  body::before{content:"";position:fixed;inset:0;pointer-events:none;z-index:0;
+    background-image:radial-gradient(1px 1px at 20% 30%,#fff6,transparent),
+      radial-gradient(1px 1px at 70% 60%,#fff4,transparent),
+      radial-gradient(1px 1px at 40% 80%,#fff5,transparent),
+      radial-gradient(1px 1px at 90% 20%,#fff3,transparent),
+      radial-gradient(1px 1px at 55% 15%,#fff4,transparent);}
+  .wrap{position:relative;z-index:1;max-width:1180px;margin:0 auto;padding:28px 20px 60px}
+  header{display:flex;align-items:baseline;gap:14px;margin-bottom:6px}
+  .logo{font-family:Fraunces,serif;font-weight:800;font-size:30px;letter-spacing:-.5px}
+  .logo .gpt{color:var(--gold)}
+  .tag{color:var(--muted);font-size:14px}
+  .grid{display:grid;grid-template-columns:380px 1fr;gap:22px;margin-top:22px;align-items:start}
+  @media(max-width:880px){.grid{grid-template-columns:1fr}}
+  .card{background:linear-gradient(180deg,var(--panel),var(--night-2));
+    border:1px solid var(--line);border-radius:18px;padding:20px}
+  .card h2{font-family:Fraunces,serif;font-weight:600;margin:0 0 14px;font-size:19px}
+  label{display:block;font-size:12px;color:var(--muted);margin:10px 0 4px;
+    text-transform:uppercase;letter-spacing:.06em}
+  input,select{width:100%;background:#0e1138;border:1px solid var(--line);
+    color:var(--ink);border-radius:10px;padding:10px 12px;font-size:14px;font-family:inherit}
+  input:focus,select:focus{outline:none;border-color:var(--accent)}
+  .row{display:flex;gap:10px}.row>*{flex:1}
+  .btn{width:100%;margin-top:16px;background:linear-gradient(180deg,var(--gold-soft),var(--gold));
+    color:#3a2a00;border:none;border-radius:11px;padding:13px;font-weight:600;
+    font-size:15px;cursor:pointer;font-family:inherit}
+  .btn:disabled{opacity:.5;cursor:default}
+  .btn.ghost{background:transparent;color:var(--gold);border:1px solid var(--gold)}
+  .hint{font-size:11.5px;color:var(--muted);margin-top:6px}
+  /* chart */
+  .chartwrap{display:flex;flex-direction:column;align-items:center;gap:14px}
+  svg.kundli{width:100%;max-width:340px;height:auto}
+  .kundli .frame{fill:none;stroke:var(--gold);stroke-width:1.6;opacity:.85}
+  .kundli .signnum{fill:var(--muted);font:600 11px Inter;text-anchor:middle}
+  .kundli .planet{fill:var(--gold-soft);font:600 11px Inter;text-anchor:middle}
+  .kundli .asc{fill:var(--accent);font:700 11px Inter;text-anchor:middle}
+  .tbl{width:100%;border-collapse:collapse;font-size:12.5px;margin-top:4px}
+  .tbl th,.tbl td{text-align:left;padding:5px 6px;border-bottom:1px solid var(--line)}
+  .tbl th{color:var(--muted);font-weight:600;text-transform:uppercase;font-size:10.5px;letter-spacing:.05em}
+  .dasha{margin-top:14px;font-size:13px}
+  .dasha .now{color:var(--gold);font-weight:600}
+  .pill{display:inline-block;background:#0e1138;border:1px solid var(--line);
+    border-radius:999px;padding:2px 9px;font-size:11px;color:var(--muted);margin:2px 4px 0 0}
+  /* chat */
+  .chat{display:flex;flex-direction:column;height:600px}
+  .msgs{flex:1;overflow-y:auto;padding-right:6px;display:flex;flex-direction:column;gap:14px}
+  .msg{max-width:88%;padding:12px 15px;border-radius:14px;font-size:14.5px;white-space:pre-wrap}
+  .msg.user{align-self:flex-end;background:var(--accent);color:#fff;border-bottom-right-radius:4px}
+  .msg.bot{align-self:flex-start;background:#0e1138;border:1px solid var(--line);border-bottom-left-radius:4px}
+  .msg.bot .who{color:var(--gold);font-size:11px;letter-spacing:.06em;text-transform:uppercase;margin-bottom:5px;display:block}
+  .composer{display:flex;gap:10px;margin-top:14px}
+  .composer input{flex:1}
+  .composer button{background:var(--gold);color:#3a2a00;border:none;border-radius:10px;padding:0 18px;font-weight:600;cursor:pointer}
+  .meter{font-size:12px;color:var(--muted);margin-top:8px;text-align:center}
+  .empty{color:var(--muted);font-size:14px;text-align:center;margin:auto;max-width:300px}
+  .suggest{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px;justify-content:center}
+  .suggest button{background:#0e1138;border:1px solid var(--line);color:var(--ink);
+    border-radius:999px;padding:7px 13px;font-size:12.5px;cursor:pointer;font-family:inherit}
+  .typing{color:var(--muted);font-size:13px;font-style:italic}
+  .hidden{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="logo">Kundli<span class="gpt">GPT</span></span>
+    <span class="tag">— AI Vedic astrologer grounded in your real birth chart</span>
+  </header>
+
+  <div class="grid">
+    <!-- LEFT: birth form + chart -->
+    <div>
+      <div class="card" id="formCard">
+        <h2>Your birth details</h2>
+
+        <div id="recentWrap" class="hidden">
+          <label style="margin-top:0">Recent entries</label>
+          <div class="suggest" id="recentChips" style="justify-content:flex-start;margin-top:4px"></div>
+        </div>
+
+        <details id="keysBox" style="margin-bottom:6px">
+          <summary style="cursor:pointer;color:var(--gold);font-size:13px">⚙︎ Keys &amp; settings</summary>
+          <label>Model provider</label>
+          <select id="provider">
+            <option value="">Server default</option>
+            <option value="anthropic">Claude (Anthropic)</option>
+            <option value="groq">Groq · Llama 3.3 70B (free tier)</option>
+          </select>
+          <label>Model override (optional)</label>
+          <input id="model" placeholder="e.g. llama-3.1-8b-instant / claude-sonnet-4-6" autocomplete="off">
+          <label>API key for the selected provider — optional if set on server</label>
+          <input id="anthropicKey" type="password" placeholder="sk-ant-… or gsk_…" autocomplete="off">
+          <label>Google Maps API key — enables place search</label>
+          <input id="gmapsKey" type="password" placeholder="AIza…" autocomplete="off">
+          <div class="hint">Keys are stored only in this browser (localStorage) and sent
+            to your own backend. For production, keep keys server-side.</div>
+          <button class="btn ghost" id="loadMapsBtn" style="margin-top:10px">Enable place search</button>
+        </details>
+
+        <label>Name (optional)</label>
+        <input id="name" placeholder="e.g. Aarav">
+        <label>Birth place</label>
+        <input id="place" placeholder="Type a city (enable place search above)…" autocomplete="off">
+        <div class="hint" id="placeHint">Selecting a place auto-fills coordinates and timezone.</div>
+        <div class="row">
+          <div><label>Date</label><input id="date" type="date" value="1990-05-15"></div>
+          <div><label>Time</label><input id="time" type="time" value="14:30"></div>
+        </div>
+        <div class="row">
+          <div><label>Latitude</label><input id="lat" type="number" step="0.0001" value="28.6139"></div>
+          <div><label>Longitude</label><input id="lon" type="number" step="0.0001" value="77.2090"></div>
+        </div>
+        <label>UTC offset (hours at birth)</label>
+        <input id="tz" type="number" step="0.25" value="5.5">
+        <div class="hint">Use the offset that applied on the birth date (India = 5.5). Lat/long of the birth town — accuracy of the ascendant depends on these.</div>
+        <button class="btn" id="genBtn">Generate chart</button>
+      </div>
+
+      <div class="card hidden" id="chartCard" style="margin-top:18px">
+        <h2>Birth chart (Kundli)</h2>
+        <div class="chartwrap">
+          <svg class="kundli" id="kundli" viewBox="0 0 360 360"></svg>
+        </div>
+        <table class="tbl" id="planetTbl"></table>
+        <div class="dasha" id="dashaBox"></div>
+        <button class="btn ghost" id="resetBtn" style="margin-top:16px">New chart</button>
+      </div>
+    </div>
+
+    <!-- RIGHT: chat -->
+    <div class="card chat">
+      <h2 style="display:flex;justify-content:space-between;align-items:center">
+        <span>Ask the astrologer</span>
+        <select id="lang" style="width:auto;font-size:12px;padding:6px 8px">
+          <option>English</option><option>Hindi</option><option>Tamil</option>
+          <option>Bengali</option><option>Marathi</option><option>Gujarati</option>
+          <option>Telugu</option><option>Kannada</option><option>Punjabi</option>
+        </select>
+      </h2>
+      <div class="msgs" id="msgs">
+        <div class="empty" id="emptyState">
+          Generate your chart, then ask anything — career, marriage timing,
+          the meaning of your current dasha. Every answer is read from your actual planets.
+        </div>
+      </div>
+      <div class="suggest hidden" id="suggest">
+        <button>What does my current Mahadasha mean for my career?</button>
+        <button>When is a good period for marriage?</button>
+        <button>Which planets are strongest in my chart?</button>
+      </div>
+      <div class="composer">
+        <input id="q" placeholder="Type your question…" disabled>
+        <button id="sendBtn" disabled>Send</button>
+      </div>
+      <div class="meter" id="meter"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = "";                       // same origin (FastAPI serves this file)
+const SIGN_NUM = {Aries:1,Taurus:2,Gemini:3,Cancer:4,Leo:5,Virgo:6,Libra:7,
+  Scorpio:8,Sagittarius:9,Capricorn:10,Aquarius:11,Pisces:12};
+const ABBR = {Sun:"Su",Moon:"Mo",Mars:"Ma",Mercury:"Me",Jupiter:"Ju",
+  Venus:"Ve",Saturn:"Sa",Rahu:"Ra",Ketu:"Ke"};
+// North-Indian house centres (house 1 = top centre, counter-clockwise)
+const HOUSE_XY = {1:[180,70],2:[95,35],3:[40,80],4:[95,180],5:[40,280],6:[95,325],
+  7:[180,290],8:[265,325],9:[320,280],10:[265,180],11:[320,80],12:[265,35]};
+
+let session=null, remaining=3, autocomplete=null, activeProvider="";
+
+const $=id=>document.getElementById(id);
+const LS_KEYS="kgpt_keys", LS_RECENT="kgpt_recent";
+
+/* ---------- key persistence ---------- */
+function loadKeys(){
+  try{const k=JSON.parse(localStorage.getItem(LS_KEYS)||"{}");
+    if(k.anthropic) $("anthropicKey").value=k.anthropic;
+    if(k.gmaps) $("gmapsKey").value=k.gmaps;
+    if(k.provider) $("provider").value=k.provider;
+    if(k.model) $("model").value=k.model;
+    return k;}catch{return {};}
+}
+function saveKeys(){
+  localStorage.setItem(LS_KEYS,JSON.stringify(
+    {anthropic:$("anthropicKey").value.trim(),gmaps:$("gmapsKey").value.trim(),
+     provider:$("provider").value,model:$("model").value.trim()}));
+}
+
+/* ---------- recent entries (last 5) ---------- */
+function readRecent(){try{return JSON.parse(localStorage.getItem(LS_RECENT)||"[]");}catch{return [];}}
+function pushRecent(entry){
+  let list=readRecent();
+  const sig=e=>`${e.name}|${e.date}|${e.time}|${e.lat}|${e.lon}`;
+  list=list.filter(e=>sig(e)!==sig(entry));
+  list.unshift(entry);
+  list=list.slice(0,5);                       // keep only the last 5
+  localStorage.setItem(LS_RECENT,JSON.stringify(list));
+  renderRecent();
+}
+function renderRecent(){
+  const list=readRecent();
+  if(!list.length){$("recentWrap").classList.add("hidden");return;}
+  $("recentWrap").classList.remove("hidden");
+  $("recentChips").innerHTML="";
+  list.forEach(e=>{
+    const b=document.createElement("button");
+    b.textContent=(e.name||e.place||"Chart")+" · "+e.date;
+    b.onclick=()=>applyRecent(e);
+    $("recentChips").appendChild(b);
+  });
+}
+function applyRecent(e){
+  $("name").value=e.name||""; $("place").value=e.place||"";
+  $("date").value=e.date; $("time").value=e.time;
+  $("lat").value=e.lat; $("lon").value=e.lon;
+  $("tz").value=e.tz;
+}
+
+/* ---------- Google Maps Places autocomplete ---------- */
+function enableMaps(){
+  const key=$("gmapsKey").value.trim();
+  if(!key){alert("Enter a Google Maps API key first (Places API enabled).");return;}
+  saveKeys();
+  if(window.google&&window.google.maps&&window.google.maps.places){initAutocomplete();return;}
+  const s=document.createElement("script");
+  s.src=`https://maps.googleapis.com/maps/api/js?key=${encodeURIComponent(key)}&libraries=places`;
+  s.async=true; s.defer=true;
+  s.onload=initAutocomplete;
+  s.onerror=()=>alert("Could not load Google Maps. Check the key and that the "
+    +"Maps JavaScript API + Places API are enabled.");
+  document.head.appendChild(s);
+}
+function initAutocomplete(){
+  // classic Autocomplete (still functional; can be upgraded to PlaceAutocompleteElement)
+  autocomplete=new google.maps.places.Autocomplete($("place"),
+    {types:["(cities)"],fields:["geometry","name","formatted_address"]});
+  autocomplete.addListener("place_changed",async ()=>{
+    const p=autocomplete.getPlace();
+    if(!p.geometry){return;}
+    const lat=p.geometry.location.lat(), lon=p.geometry.location.lng();
+    $("lat").value=lat.toFixed(4); $("lon").value=lon.toFixed(4);
+    $("place").value=p.formatted_address||p.name||$("place").value;
+    await prefillTimezone(lat,lon);
+  });
+  $("placeHint").textContent="Place search enabled — start typing a city.";
+  $("placeHint").style.color="var(--ok)";
+}
+async function prefillTimezone(lat,lon){
+  const date=$("date").value,time=$("time").value;
+  if(!date||!time) return;
+  const [y,mo,da]=date.split("-").map(Number);
+  const [hh,mi]=time.split(":").map(Number);
+  try{
+    const r=await fetch(API+"/api/timezone",{method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({lat,lon,year:y,month:mo,day:da,hour:hh,minute:mi})});
+    const d=await r.json();
+    if(d.offset_hours!=null){
+      $("tz").value=d.offset_hours;
+      $("placeHint").textContent=`Timezone: ${d.tz_name||"approx"} `
+        +`(UTC${d.offset_hours>=0?"+":""}${d.offset_hours}) on the birth date.`;
+    }
+  }catch{/* keep manual value */}
+}
+
+
+function drawKundli(chart){
+  const ascSign = chart.ascendant.sign;
+  const ascNum = SIGN_NUM[ascSign];
+  // group planets by house
+  const byHouse={}; for(let h=1;h<=12;h++) byHouse[h]=[];
+  chart.planets.forEach(p=>byHouse[p.house].push(p));
+  let svg=`
+    <rect class="frame" x="6" y="6" width="348" height="348"/>
+    <line class="frame" x1="6" y1="6" x2="354" y2="354"/>
+    <line class="frame" x1="354" y1="6" x2="6" y2="354"/>
+    <polygon class="frame" points="180,6 354,180 180,354 6,180"/>`;
+  for(let h=1;h<=12;h++){
+    const [x,y]=HOUSE_XY[h];
+    const signNum=((ascNum-1+h-1)%12)+1;
+    svg+=`<text class="signnum" x="${x}" y="${y-14}">${signNum}</text>`;
+    const ps=byHouse[h];
+    ps.forEach((p,i)=>{
+      const cols=ps.length>3?2:1;
+      const dx=((i%cols)-(cols-1)/2)*26;
+      const dy=Math.floor(i/cols)*14;
+      const cls=p.name==="Ascendant"?"asc":"planet";
+      const txt=ABBR[p.name]+(p.retrograde?"ᴿ":"");
+      svg+=`<text class="${cls}" x="${x+dx}" y="${y+2+dy}">${txt}</text>`;
+    });
+  }
+  $("kundli").innerHTML=svg;
+}
+
+function fillTable(chart){
+  let h=`<tr><th>Planet</th><th>Sign</th><th>Deg</th><th>House</th><th>Nakshatra</th></tr>`;
+  chart.planets.forEach(p=>{
+    h+=`<tr><td>${p.name}${p.retrograde?" (R)":""}</td><td>${p.sign}</td>
+        <td>${p.degree_in_sign.toFixed(1)}°</td><td>${p.house}</td>
+        <td>${p.nakshatra} ${p.pada}</td></tr>`;
+  });
+  $("planetTbl").innerHTML=h;
+}
+
+function fillDasha(chart){
+  const d=chart.dasha; let s="";
+  if(d.current_mahadasha){
+    const m=d.current_mahadasha,a=d.current_antardasha;
+    s+=`<div>Running: <span class="now">${m.lord} Mahadasha</span> `
+      +`(${m.start} → ${m.end})</div>`;
+    if(a) s+=`<div>Sub-period: <span class="now">${a.lord} Antardasha</span> `
+      +`(${a.start} → ${a.end})</div>`;
+  }
+  s+=`<div style="margin-top:8px">`;
+  const today=new Date().toISOString().slice(0,10);
+  d.timeline.filter(m=>m.end>=today).slice(0,5).forEach(m=>{
+    s+=`<span class="pill">${m.lord} ${m.start.slice(0,4)}–${m.end.slice(0,4)}</span>`;
+  });
+  s+=`</div>`;
+  $("dashaBox").innerHTML=s;
+}
+
+async function generate(){
+  const date=$("date").value, time=$("time").value;
+  if(!date||!time){alert("Enter date and time");return;}
+  const [y,mo,da]=date.split("-").map(Number);
+  const [hh,mi]=time.split(":").map(Number);
+  const body={name:$("name").value,place:$("place").value,
+    year:y,month:mo,day:da,hour:hh,minute:mi,
+    lat:parseFloat($("lat").value),lon:parseFloat($("lon").value),
+    tz_offset_hours:$("tz").value===""?null:parseFloat($("tz").value),
+    api_key:$("anthropicKey").value.trim()||null,
+    provider:$("provider").value||null,
+    model:$("model").value.trim()||null};
+  saveKeys();
+  $("genBtn").disabled=true; $("genBtn").textContent="Computing…";
+  try{
+    const r=await fetch(API+"/api/chart",{method:"POST",
+      headers:{"Content-Type":"application/json"},body:JSON.stringify(body)});
+    if(!r.ok) throw new Error((await r.json()).detail||"error");
+    const data=await r.json();
+    session=data.session_id; remaining=data.free_questions_remaining;
+    activeProvider=data.provider||"";
+    drawKundli(data.chart); fillTable(data.chart); fillDasha(data.chart);
+    // remember this entry (last 5)
+    pushRecent({name:$("name").value,place:$("place").value,date:date,time:time,
+      lat:$("lat").value,lon:$("lon").value,tz:data.tz_offset_used});
+    $("chartCard").classList.remove("hidden");
+    $("formCard").classList.add("hidden");
+    $("emptyState").classList.add("hidden");
+    $("suggest").classList.remove("hidden");
+    $("q").disabled=false; $("sendBtn").disabled=false; $("q").focus();
+    updateMeter();
+  }catch(e){alert("Could not generate chart: "+e.message);}
+  finally{$("genBtn").disabled=false; $("genBtn").textContent="Generate chart";}
+}
+
+function updateMeter(){
+  const prov = activeProvider ? ` · model: ${activeProvider}` : "";
+  $("meter").textContent = (remaining>0
+    ? `${remaining} free question${remaining>1?"s":""} remaining`
+    : "Free questions used — upgrade to Pro for unlimited readings.") + prov;
+  if(remaining<=0){$("q").disabled=true;$("sendBtn").disabled=true;}
+}
+
+function addMsg(text,who){
+  const d=document.createElement("div");
+  d.className="msg "+who;
+  d.innerHTML = who==="bot" ? `<span class="who">Astrologer</span>${escapeHtml(text)}` : escapeHtml(text);
+  $("msgs").appendChild(d); $("msgs").scrollTop=$("msgs").scrollHeight;
+  return d;
+}
+function escapeHtml(s){return s.replace(/[&<>]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;"}[c]));}
+
+async function send(text){
+  const q=(text||$("q").value).trim(); if(!q||!session) return;
+  $("suggest").classList.add("hidden");
+  addMsg(q,"user"); $("q").value="";
+  $("q").disabled=true; $("sendBtn").disabled=true;
+  const t=addMsg("reading your chart…","bot"); t.classList.add("typing");
+  try{
+    const r=await fetch(API+"/api/chat",{method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({session_id:session,message:q,language:$("lang").value})});
+    const data=await r.json();
+    t.remove();
+    if(!r.ok){
+      addMsg(data.detail?.message||data.detail||"Something went wrong.","bot");
+    }else{
+      addMsg(data.answer,"bot"); remaining=data.free_questions_remaining;
+    }
+  }catch(e){t.remove();addMsg("Network error: "+e.message,"bot");}
+  finally{ updateMeter(); if(remaining>0){$("q").disabled=false;$("sendBtn").disabled=false;$("q").focus();} }
+}
+
+$("genBtn").onclick=generate;
+$("loadMapsBtn").onclick=enableMaps;
+$("resetBtn").onclick=()=>location.reload();
+$("sendBtn").onclick=()=>send();
+$("q").addEventListener("keydown",e=>{if(e.key==="Enter")send();});
+document.querySelectorAll("#suggest button").forEach(b=>b.onclick=()=>send(b.textContent));
+
+// init: restore keys, show recent entries, auto-enable maps if key saved
+const _k=loadKeys();
+renderRecent();
+if(_k.gmaps){ $("keysBox").open=false; enableMaps(); }
+</script>
+</body>
+</html>
