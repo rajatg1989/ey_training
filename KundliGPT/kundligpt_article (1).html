@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Building a KundliGPT replica: why the chart, not the model, is the moat</title>
+<meta name="description" content="A build log for a chart-grounded Vedic astrology assistant — computing the kundli yourself with Swiss Ephemeris, feeding structured data to an LLM, and keeping the model pluggable between Claude and Groq.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1b1c22; --soft:#54566a; --faint:#8a8ca0;
+    --bg:#fbfaf7; --card:#ffffff; --line:#e7e4dc;
+    --indigo:#3f3aa0; --indigo-deep:#26235f; --gold:#b7862f; --gold-soft:#f3ead4;
+    --code-bg:#1a1d2e; --code-ink:#e7e6f2; --code-dim:#9fa3c9; --code-gold:#f0c876;
+    --maxw:730px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:Inter,system-ui,-apple-system,sans-serif;line-height:1.7;
+    -webkit-font-smoothing:antialiased;font-size:18px}
+  .wrap{max-width:var(--maxw);margin:0 auto;padding:0 22px}
+
+  /* ---- masthead ---- */
+  header.top{border-bottom:1px solid var(--line);background:
+    linear-gradient(180deg,#f7f4ec,transparent)}
+  .kicker{font-family:Inter;font-weight:600;font-size:12.5px;letter-spacing:.14em;
+    text-transform:uppercase;color:var(--gold);margin:0 0 14px}
+  h1{font-family:Fraunces,Georgia,serif;font-weight:800;font-size:clamp(30px,5.4vw,50px);
+    line-height:1.08;letter-spacing:-.015em;margin:0 0 18px;color:var(--indigo-deep)}
+  .dek{font-family:Fraunces,serif;font-weight:400;font-size:clamp(18px,2.4vw,22px);
+    color:var(--soft);line-height:1.45;margin:0 0 26px}
+  .byline{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center;
+    font-size:14px;color:var(--faint);padding:0 0 30px;border-top:1px solid var(--line);
+    margin-top:8px;padding-top:18px}
+  .byline .tag{background:var(--gold-soft);color:#7a5a17;border-radius:999px;
+    padding:3px 11px;font-size:12px;font-weight:600}
+  .top .wrap{padding-top:54px;padding-bottom:0}
+
+  /* ---- body ---- */
+  main{padding:44px 0 20px}
+  main p{margin:0 0 22px}
+  h2{font-family:Fraunces,serif;font-weight:600;font-size:clamp(23px,3.4vw,30px);
+    line-height:1.15;letter-spacing:-.01em;margin:52px 0 8px;color:var(--indigo-deep)}
+  h2 .n{color:var(--gold);font-size:.62em;vertical-align:2px;margin-right:10px;font-weight:600}
+  h3{font-family:Inter;font-weight:600;font-size:18.5px;margin:32px 0 6px;color:var(--ink)}
+  .lead{font-size:20px;color:var(--soft)}
+  a{color:var(--indigo);text-decoration:none;border-bottom:1px solid #c9c6ee}
+  strong{font-weight:600;color:#111}
+  code{font-family:'JetBrains Mono',ui-monospace,monospace;font-size:.86em;
+    background:#f0ede4;padding:1.5px 6px;border-radius:5px;color:#6b4a12}
+
+  /* pull-quote / aside */
+  .aside{border-left:3px solid var(--gold);background:linear-gradient(90deg,#fbf6ea,transparent);
+    padding:16px 20px;margin:28px 0;border-radius:0 10px 10px 0}
+  .aside p{margin:0;font-family:Fraunces,serif;font-size:19px;color:var(--indigo-deep);line-height:1.5}
+
+  /* code blocks */
+  pre{background:var(--code-bg);color:var(--code-ink);border-radius:12px;
+    padding:18px 20px;overflow-x:auto;margin:24px 0;font-size:13.5px;line-height:1.6;
+    border:1px solid #2a2e45}
+  pre code{background:none;padding:0;color:inherit;font-size:13.5px}
+  .cm{color:var(--code-dim)} .kw{color:#c99cf0} .st{color:#9fcae} .fn{color:var(--code-gold)}
+  .code-cap{display:block;font-size:12.5px;color:var(--faint);margin:-14px 0 26px;
+    font-family:'JetBrains Mono',monospace}
+
+  figure{margin:34px 0}
+  figure svg{width:100%;height:auto;display:block;border:1px solid var(--line);
+    border-radius:14px;background:#fff}
+  figcaption{font-size:13.5px;color:var(--faint);text-align:center;margin-top:12px;
+    font-style:italic}
+
+  table{width:100%;border-collapse:collapse;margin:24px 0;font-size:15px}
+  th,td{text-align:left;padding:10px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+  th{font-weight:600;color:var(--indigo-deep);font-size:13px;text-transform:uppercase;
+    letter-spacing:.04em}
+  td code{font-size:13px}
+
+  ul,ol{margin:0 0 22px;padding-left:22px}
+  li{margin:0 0 10px}
+
+  hr{border:none;border-top:1px solid var(--line);margin:46px 0}
+
+  footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--faint);
+    font-size:14px}
+  footer .wrap{padding-top:0}
+
+  ::selection{background:var(--gold-soft)}
+  @media (max-width:560px){ body{font-size:17px} main{padding-top:32px} }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <p class="kicker">Build log · Applied LLMs</p>
+    <h1>The chart is the moat, not the model</h1>
+    <p class="dek">How to build a chart-grounded Vedic astrology assistant that reads sharp instead of generic — by computing the kundli yourself and keeping the language model pluggable.</p>
+    <div class="byline">
+      <span class="tag">Swiss Ephemeris</span>
+      <span class="tag">FastAPI</span>
+      <span class="tag">LLM grounding</span>
+      <span class="tag">Claude / Groq</span>
+      <span>~12 min read</span>
+    </div>
+  </div>
+</header>
+
+<main>
+<div class="wrap">
+
+<p class="lead">If you wire a language model to a third-party astrology API and the answers still feel like newspaper horoscopes, the model isn't the problem. The grounding is. This is a build log for a KundliGPT-style assistant that fixes the grounding first — and treats the model as the last, swappable step.</p>
+
+<p>The premise is simple to state and easy to get wrong. A good astrology chatbot has to do two very different jobs: <em>compute an accurate birth chart</em>, and <em>interpret it well</em>. Most weak implementations collapse those jobs into one — they ask an API for a pre-written "Saturn in the 7th house means…" blurb and hand it to the model to reword. The model has nothing specific to reason about, so it drifts toward the generic. The fix is to separate the two jobs cleanly, own the first one entirely, and give the model exact facts to interpret rather than prose to paraphrase.</p>
+
+<div class="aside"><p>The accuracy a user feels comes almost entirely from the deterministic layer. The model only ever interprets what that layer computes.</p></div>
+
+<h2><span class="n">01</span>Grounding beats paraphrase</h2>
+
+<p>The single most important decision is to compute the chart yourself with <strong>Swiss Ephemeris</strong> instead of renting interpreted text from an astrology API. Swiss Ephemeris gives you raw planetary longitudes to arc-second precision for any moment and place. From those raw positions you derive everything downstream: the ascendant, house cusps, sidereal sign placements, nakshatras and padas, retrogrades, the Vimshottari dasha timeline, and current transits.</p>
+
+<p>That ownership is what makes the model's answers specific. Instead of "your Saturn placement suggests patience," the model is handed <em>Saturn at 20.33° Scorpio, house 2, Jyeshtha nakshatra, currently in a Rahu–Moon dasha period ending December 2027</em> — and asked only to interpret. Interpretation over exact data is a far more constrained task than generating astrology from a vague prompt, and constrained tasks are where models are reliable.</p>
+
+<h2><span class="n">02</span>The shape of the system</h2>
+
+<p>Three layers, read top to bottom along the request path, with the external services each layer talks to on the right. The compute layer in the middle is where the real work lives.</p>
+
+<figure>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 680 844" font-family="Inter, system-ui, sans-serif" role="img" aria-label="KundliGPT replica architecture">
+  <title>KundliGPT replica architecture</title>
+  <style>
+    .a-bg{fill:#fcfbf8}
+    .a-title{font-size:14px;font-weight:600}
+    .a-bt{font-size:13px;font-weight:600;fill:#1c2237}
+    .a-bs{font-size:12px;font-weight:400}
+    .a-inner{fill:#ffffff;stroke:#c9c8c0;stroke-width:.8}
+    .a-blue{fill:#e6f1fb;stroke:#185fa5;stroke-width:.8}   .a-blueT{fill:#0c447c}
+    .a-purple{fill:#eeedfe;stroke:#534ab7;stroke-width:.8} .a-purpleT{fill:#3c3489}
+    .a-teal{fill:#e1f5ee;stroke:#0f6e56;stroke-width:.8}   .a-tealT{fill:#085041}
+    .a-amber{fill:#faeeda;stroke:#854f0b;stroke-width:.8}  .a-amberT{fill:#633806}
+    .a-gray{fill:#f1efe8;stroke:#5f5e5a;stroke-width:.8}   .a-grayT{fill:#2c2c2a}
+    .a-arr{stroke:#73726c;stroke-width:1.5;fill:none}
+    .a-leg{font-size:12px;fill:#5f5e5a}
+  </style>
+  <defs>
+    <marker id="aarrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M2 1L8 5L2 9" fill="none" stroke="#73726c" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+    </marker>
+  </defs>
+  <rect class="a-bg" x="0" y="0" width="680" height="844"/>
+  <rect class="a-blue" x="40" y="40" width="410" height="186" rx="18"/>
+  <text class="a-title a-blueT" x="58" y="64">Browser (client)</text>
+  <rect class="a-inner" x="58" y="74" width="374" height="44" rx="8"/>
+  <text class="a-bt" x="245" y="92" text-anchor="middle">Birth form + API keys</text>
+  <text class="a-bs" x="245" y="109" text-anchor="middle" fill="#5f5e5a">place search · saved keys</text>
+  <rect class="a-inner" x="58" y="124" width="374" height="44" rx="8"/>
+  <text class="a-bt" x="245" y="142" text-anchor="middle">Recent entries</text>
+  <text class="a-bs" x="245" y="159" text-anchor="middle" fill="#5f5e5a">last 5 cached · localStorage</text>
+  <rect class="a-inner" x="58" y="174" width="374" height="44" rx="8"/>
+  <text class="a-bt" x="245" y="192" text-anchor="middle">Kundli + chat UI</text>
+  <text class="a-bs" x="245" y="209" text-anchor="middle" fill="#5f5e5a">chart render · Q&amp;A</text>
+  <rect class="a-purple" x="40" y="258" width="410" height="238" rx="18"/>
+  <text class="a-title a-purpleT" x="58" y="282">FastAPI backend (app.py)</text>
+  <rect class="a-inner" x="58" y="292" width="374" height="44" rx="8"/>
+  <text class="a-bt" x="245" y="310" text-anchor="middle">/api/timezone</text>
+  <text class="a-bs" x="245" y="327" text-anchor="middle" fill="#5f5e5a">historical UTC offset</text>
+  <rect class="a-inner" x="58" y="342" width="374" height="44" rx="8"/>
+  <text class="a-bt" x="245" y="360" text-anchor="middle">/api/chart</text>
+  <text class="a-bs" x="245" y="377" text-anchor="middle" fill="#5f5e5a">build chart · open session</text>
+  <rect class="a-inner" x="58" y="392" width="374" height="44" rx="8"/>
+  <text class="a-bt" x="245" y="410" text-anchor="middle">/api/chat</text>
+  <text class="a-bs" x="245" y="427" text-anchor="middle" fill="#5f5e5a">memory + metering</text>
+  <rect class="a-inner" x="58" y="442" width="374" height="44" rx="8"/>
+  <text class="a-bt" x="245" y="460" text-anchor="middle">Session store</text>
+  <text class="a-bs" x="245" y="477" text-anchor="middle" fill="#5f5e5a">chart · history · key · count</text>
+  <rect class="a-teal" x="40" y="528" width="410" height="238" rx="18"/>
+  <text class="a-title a-tealT" x="58" y="552">Compute layer · the five steps</text>
+  <rect class="a-inner" x="58" y="562" width="374" height="44" rx="8"/>
+  <text class="a-bt" x="245" y="580" text-anchor="middle">Step 1 · ephemeris.py</text>
+  <text class="a-bs" x="245" y="597" text-anchor="middle" fill="#5f5e5a">Swiss Ephemeris · LRU ×5</text>
+  <rect class="a-inner" x="58" y="612" width="374" height="44" rx="8"/>
+  <text class="a-bt" x="245" y="630" text-anchor="middle">Step 4 · dasha + transits</text>
+  <text class="a-bs" x="245" y="647" text-anchor="middle" fill="#5f5e5a">Vimshottari timing engine</text>
+  <rect class="a-inner" x="58" y="662" width="374" height="44" rx="8"/>
+  <text class="a-bt" x="245" y="680" text-anchor="middle">Step 2 · chart.py</text>
+  <text class="a-bs" x="245" y="697" text-anchor="middle" fill="#5f5e5a">structured context block</text>
+  <rect class="a-inner" x="58" y="712" width="374" height="44" rx="8"/>
+  <text class="a-bt" x="245" y="730" text-anchor="middle">Step 3 · prompts.py</text>
+  <text class="a-bs" x="245" y="747" text-anchor="middle" fill="#5f5e5a">interpretation prompt</text>
+  <rect class="a-amber" x="470" y="90" width="168" height="44" rx="8"/>
+  <text class="a-bt a-amberT" x="554" y="108" text-anchor="middle">Google Maps</text>
+  <text class="a-bs a-amberT" x="554" y="125" text-anchor="middle">Places API</text>
+  <rect class="a-amber" x="470" y="386" width="168" height="44" rx="8"/>
+  <text class="a-bt a-amberT" x="554" y="404" text-anchor="middle">Anthropic</text>
+  <text class="a-bs a-amberT" x="554" y="421" text-anchor="middle">Claude API</text>
+  <rect class="a-gray" x="470" y="556" width="168" height="44" rx="8"/>
+  <text class="a-bt a-grayT" x="554" y="574" text-anchor="middle">Swiss Ephemeris</text>
+  <text class="a-bs a-grayT" x="554" y="591" text-anchor="middle">ephemeris data</text>
+  <line class="a-arr" x1="245" y1="226" x2="245" y2="255" marker-end="url(#aarrow)"/>
+  <line class="a-arr" x1="245" y1="496" x2="245" y2="525" marker-end="url(#aarrow)"/>
+  <line class="a-arr" x1="450" y1="112" x2="468" y2="112" marker-end="url(#aarrow)"/>
+  <line class="a-arr" x1="450" y1="408" x2="468" y2="408" marker-end="url(#aarrow)"/>
+  <line class="a-arr" x1="450" y1="578" x2="468" y2="578" marker-end="url(#aarrow)"/>
+  <rect class="a-blue" x="58" y="800" width="12" height="12" rx="3"/>
+  <text class="a-leg" x="76" y="810">Client</text>
+  <rect class="a-purple" x="150" y="800" width="12" height="12" rx="3"/>
+  <text class="a-leg" x="168" y="810">Backend</text>
+  <rect class="a-teal" x="262" y="800" width="12" height="12" rx="3"/>
+  <text class="a-leg" x="280" y="810">Compute</text>
+  <rect class="a-amber" x="378" y="800" width="12" height="12" rx="3"/>
+  <text class="a-leg" x="396" y="810">External services</text>
+</svg>
+<figcaption>Request path: a place selection calls <code>/api/timezone</code>; the form posts to <code>/api/chart</code>, which runs the compute layer and opens a session; each question hits <code>/api/chat</code>, which pins the chart and calls the model.</figcaption>
+</figure>
+
+<h2><span class="n">03</span>The five layers</h2>
+
+<h3>Step 1 — Compute the chart (the moat)</h3>
+<p>Set the sidereal mode to Lahiri, convert the birth moment to Julian Day in UT, then read each body's sidereal longitude. Whole-sign houses are counted from the ascendant's sign. Everything else — nakshatra, pada, dignity — falls out of the longitude.</p>
+<pre><code><span class="kw">import</span> swisseph <span class="kw">as</span> swe
+
+swe.set_sid_mode(swe.SIDM_LAHIRI, <span class="st">0</span>, <span class="st">0</span>)
+jd    = swe.julday(y, m, d, hour_ut, swe.GREG_CAL)
+flags = swe.FLG_SWIEPH | swe.FLG_SIDEREAL | swe.FLG_SPEED
+
+lon, speed = swe.calc_ut(jd, swe.SATURN, flags)[<span class="st">0</span>][<span class="st">0</span>], _
+sign  = SIGNS[<span class="kw">int</span>(lon // <span class="st">30</span>)]           <span class="cm"># sidereal sign</span>
+house = ((<span class="kw">int</span>(lon//<span class="st">30</span>) - asc_sign_idx) % <span class="st">12</span>) + <span class="st">1</span>  <span class="cm"># whole-sign</span></code></pre>
+<span class="code-cap">astro/ephemeris.py — verified: Lahiri ayanamsa 23.857° for 2000; Gandhi's chart → Libra ascendant.</span>
+
+<h3>Step 2 — Serialize a dense context block</h3>
+<p>Turn the chart into exact, machine-derived facts the model reasons over — not prose to reword. This block is the difference between sharp and generic.</p>
+<pre><code><span class="cm"># what the model actually receives (excerpt)</span>
+LAGNA: Virgo 4.21°  | Lagna lord: Mercury
+  Saturn   Scorpio  20.33°  House  2  Jyeshtha pada 2  [neutral]
+  Moon     Cancer   27.96°  House 10  Ashlesha  pada 4  [own sign]
+RUNNING Mahadasha: Rahu (2011-01-06 -&gt; 2029-01-06)
+RUNNING Antardasha: Moon (2026-06-19 -&gt; 2027-12-19)</code></pre>
+<span class="code-cap">astro/chart.py — house lords, dasha windows, and live transits are all included.</span>
+
+<h3>Step 3 — Interpret, don't calculate</h3>
+<p>The system prompt gives the model a persona and a rule scaffold, and — crucially — tells it the numbers are already correct. Its job is to reason from house lords and the running dasha, cite the logic in plain language, and stay honest about astrology being guidance rather than fate.</p>
+
+<h3>Step 4 — The timing engine</h3>
+<p>Vimshottari dasha is what produces the "when does this period begin or end" answers people find uncanny. It's derived from the Moon's nakshatra at birth: a 120-year cycle of nine planetary lords, with the balance of the first period set by how far the Moon has moved through its nakshatra.</p>
+<pre><code><span class="cm"># balance of the birth mahadasha</span>
+frac_elapsed  = (moon_lon % NAK_SPAN) / NAK_SPAN
+first_balance = full_years[moon_lord] * (<span class="st">1</span> - frac_elapsed)
+<span class="cm"># then walk the fixed lord sequence, sub-dividing each into antardashas</span></code></pre>
+<span class="code-cap">astro/dasha.py — verified: 120-year span, correct lord order, current Rahu–Moon period.</span>
+
+<h3>Step 5 — Memory and the product layer</h3>
+<p>A session pins the chart in the system prompt so follow-ups don't degrade, keeps a rolling window of turns, and meters free questions. This is the ordinary web-app scaffolding — auth, billing, saved readings — that turns a script into a product.</p>
+
+<h2><span class="n">04</span>Making it usable</h2>
+
+<p>Three additions moved it from demo to something a real person can use.</p>
+
+<p><strong>Place search with a correct timezone.</strong> A Google Places autocomplete on the birth-place field fills latitude and longitude. But the subtle part is the timezone: birth charts need the offset that applied <em>on the birth date</em>, including historical base-offset changes and DST — not today's offset. Rather than a live timezone API, the offset is derived from the coordinates and the birth datetime against the IANA tz database, which encodes those historical rules.</p>
+<pre><code><span class="kw">from</span> timezonefinder <span class="kw">import</span> TimezoneFinder
+<span class="kw">from</span> zoneinfo <span class="kw">import</span> ZoneInfo
+
+tz   = TimezoneFinder().timezone_at(lat=lat, lng=lon)
+off  = datetime(y, m, d, hh, mi, tzinfo=ZoneInfo(tz)).utcoffset()
+<span class="cm"># Delhi 1990 -&gt; +5.5 · London Jul 1970 -&gt; +1 (BST), handled automatically</span></code></pre>
+<span class="code-cap">astro/geo.py — the ascendant is birth-time sensitive, so this is not a cosmetic detail.</span>
+
+<p><strong>Remembering the last five entries.</strong> Recent birth-detail sets are cached client-side and shown as clickable chips, so re-checking a chart is one tap. The server mirrors this with a small LRU cache on the natal computation — the expensive, date-independent part.</p>
+
+<p><strong>Bring-your-own key.</strong> An optional key field lets the app run on a user's own credentials, stored only in their browser, with the server environment variable as the default. Convenient for a personal tool; for production you'd keep keys server-side.</p>
+
+<h2><span class="n">05</span>The model is the last step — and it's swappable</h2>
+
+<p>Because the chart is computed deterministically, the language model is genuinely pluggable. That reframes the most common question about cost: <em>if I use a cheaper or free model, will the results still be accurate?</em> The answer splits cleanly.</p>
+
+<ul>
+  <li><strong>Chart accuracy is untouched.</strong> Positions, houses, dasha dates — all pure Python. Every model sees the identical, correct chart.</li>
+  <li><strong>Interpretation quality is the only variable.</strong> That's a function of the model's reasoning, its fidelity to the rule scaffold, and its non-English output — not of which vendor serves it.</li>
+</ul>
+
+<p>So the abstraction is a single function with a provider registry. Adding a provider is a few lines; switching the default is one environment variable.</p>
+<pre><code><span class="kw">def</span> <span class="fn">complete</span>(system, messages, *, provider=<span class="kw">None</span>, model=<span class="kw">None</span>, api_key=<span class="kw">None</span>):
+    provider = provider <span class="kw">or</span> DEFAULT_PROVIDER            <span class="cm"># LLM_PROVIDER env var</span>
+    <span class="kw">if</span> provider == <span class="st">"anthropic"</span>:
+        <span class="kw">return</span> anthropic_call(system, messages, model, api_key)
+    <span class="cm"># Groq &amp; other OpenAI-compatible endpoints via base_url</span>
+    <span class="kw">return</span> openai_compatible_call(system, messages, model, api_key)</code></pre>
+<span class="code-cap">llm.py — the only part of the pipeline that knows or cares which model answers.</span>
+
+<div class="aside"><p>"Groq" isn't a model. It's an inference provider that runs open-source models — so "use Groq instead of Claude" means "use Llama&nbsp;3.3&nbsp;70B instead of Claude." For grounded interpretation, that gap is smaller than it sounds.</p></div>
+
+<h2><span class="n">06</span>The free-tier reality check</h2>
+
+<p>A free, fast model is attractive, but the binding constraint usually isn't quality — it's rate limits, and specifically tokens-per-minute. Because the chart context is pinned on every turn, each request is token-heavy, so a generous requests-per-day number can be misleading.</p>
+
+<table>
+  <thead><tr><th>Concern</th><th>Practical reading</th></tr></thead>
+  <tbody>
+    <tr><td>Model catalog</td><td>Open-source only (Llama, Qwen, GPT-OSS, etc.); fine for interpretation.</td></tr>
+    <tr><td>Free-tier limits</td><td>Tens of requests/min and a modest tokens/min ceiling, per organization. Great for prototyping, tight for real traffic.</td></tr>
+    <tr><td>The real bottleneck</td><td>Tokens/min, not requests/day — a long pinned prompt eats the budget fast. Prompt caching helps.</td></tr>
+    <tr><td>Model choice</td><td>A 70B-class model is the strong free pick; the small fast model is noticeably weaker at synthesis and non-English output.</td></tr>
+  </tbody>
+</table>
+
+<p>The design that falls out of this is a <strong>hybrid</strong>: because the provider is per-session, you can default casual questions to a free, fast model and route a "deep reading" to a frontier model like Claude where the extra reasoning earns its cost.</p>
+
+<h2><span class="n">07</span>Run it locally</h2>
+
+<p>The whole thing is a handful of files. Everything deterministic lives under <code>astro/</code>; the model is isolated in <code>llm.py</code>; the API and product logic sit in <code>app.py</code>; the UI is one static file.</p>
+
+<pre><code>kundli_app/
+├── app.py              <span class="cm"># FastAPI: /api/chart, /api/chat, memory, metering</span>
+├── llm.py              <span class="cm"># pluggable provider layer (Claude / Groq)</span>
+├── prompts.py          <span class="cm"># the chart-grounded interpretation prompt</span>
+├── requirements.txt
+├── astro/
+│   ├── ephemeris.py    <span class="cm"># Step 1 · Swiss Ephemeris compute</span>
+│   ├── chart.py        <span class="cm"># Step 2 · structured context serializer</span>
+│   ├── dasha.py        <span class="cm"># Step 4 · Vimshottari timing</span>
+│   ├── transits.py     <span class="cm"># Step 4 · current transits</span>
+│   └── geo.py          <span class="cm"># historical timezone from coordinates</span>
+└── static/
+    └── index.html      <span class="cm"># chat UI + North-Indian kundli chart</span></code></pre>
+<span class="code-cap"># Requires Python 3.10+</span>
+
+<h3>1 · Install dependencies</h3>
+<pre><code><span class="cm"># from the project root</span>
+cd kundli_app
+python -m venv .venv <span class="kw">&amp;&amp;</span> source .venv/bin/activate   <span class="cm"># Windows: .venv\Scripts\activate</span>
+
+pip install -r requirements.txt
+<span class="cm"># or install the packages directly:</span>
+pip install pyswisseph fastapi <span class="st">"uvicorn[standard]"</span> pydantic \
+            timezonefinder tzdata anthropic openai</code></pre>
+
+<h3>2 · Choose a model provider and set keys</h3>
+<p>The provider is the only thing you configure. Pick one:</p>
+<pre><code><span class="cm"># Option A — Claude (default provider)</span>
+export ANTHROPIC_API_KEY=sk-ant-...
+
+<span class="cm"># Option B — Groq free tier (open-source models, no card)</span>
+export LLM_PROVIDER=groq
+export GROQ_API_KEY=gsk_...          <span class="cm"># from console.groq.com/keys</span>
+
+<span class="cm"># Windows PowerShell:</span>
+<span class="cm">#   $env:LLM_PROVIDER="groq"; $env:GROQ_API_KEY="gsk_..."</span></code></pre>
+
+<h3>3 · Start the server</h3>
+<pre><code>uvicorn app:app --reload
+<span class="cm"># → open http://localhost:8000</span></code></pre>
+
+<p>Enter birth details, generate the chart, and ask a question. You can also switch the provider, model, or key per session from the UI's <em>Keys &amp; settings</em> panel — no restart needed. Optional overrides: <code>ANTHROPIC_MODEL</code> (default <code>claude-opus-4-8</code>) and <code>GROQ_MODEL</code> (default <code>llama-3.3-70b-versatile</code>).</p>
+
+<h2><span class="n">08</span>What I'd harden next</h2>
+<ul>
+  <li><strong>Persistence</strong> — sessions are in-memory; move to Redis or Postgres.</li>
+  <li><strong>Auth &amp; billing</strong> — real accounts and a payment provider behind the free-question meter.</li>
+  <li><strong>More technique</strong> — divisional charts (D9, D10) and classical yogas, all derivable from the same raw positions.</li>
+  <li><strong>Streaming</strong> — server-sent events for a snappier chat feel.</li>
+  <li><strong>Key hygiene</strong> — server-side keys and referrer-restricted map keys in production.</li>
+</ul>
+
+<hr>
+
+<p>The lesson generalizes past astrology. Whenever a domain has a hard, computable core — finance, scheduling, physics, law with structured statutes — the winning pattern is the same: compute the ground truth deterministically, hand the model exact structured facts, and ask it only to reason and explain. The model is the interface, not the engine. Get the grounding right and even a free model reads like an expert; get it wrong and the best model in the world still sounds like a horoscope.</p>
+
+</div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p>Build log · a chart-grounded Vedic astrology assistant. Architecture: Swiss Ephemeris compute layer, structured-context prompting, Vimshottari timing engine, and a pluggable LLM layer (Claude / Groq). Code snippets are illustrative excerpts.</p>
+  </div>
+</footer>
+
+</body>
+</html>
